@@ -1,5 +1,8 @@
 use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
+pub mod error;
+pub mod instructions;
+pub mod state;
 
 const COMP_DEF_OFFSET_ADD_TOGETHER: u32 = comp_def_offset("add_together");
 
