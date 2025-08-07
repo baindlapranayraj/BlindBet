@@ -23,9 +23,10 @@ pub mod blindbet {
         ciphertext_0: [u8; 32],
         ciphertext_1: [u8; 32],
         pub_key: [u8; 32],
-        nonce: u128,
+        nonce: u128
     ) -> Result<()> {
-        let args = vec![
+        let args =
+            vec![
             Argument::ArcisPubkey(pub_key),
             Argument::PlaintextU128(nonce),
             Argument::EncryptedU8(ciphertext_0),
@@ -38,11 +39,13 @@ pub mod blindbet {
     #[arcium_callback(encrypted_ix = "add_together")]
     pub fn add_together_callback(
         ctx: Context<AddTogetherCallback>,
-        output: ComputationOutputs<AddTogetherOutput>,
+        output: ComputationOutputs<AddTogetherOutput>
     ) -> Result<()> {
         let o = match output {
             ComputationOutputs::Success(AddTogetherOutput { field_0: o }) => o,
-            _ => return Err(ErrorCode::AbortedComputation.into()),
+            _ => {
+                return Err(ErrorCode::AbortedComputation.into());
+            }
         };
 
         emit!(SumEvent {

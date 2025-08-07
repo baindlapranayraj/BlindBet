@@ -1,6 +1,8 @@
-use arcis_imports::*;
-pub mod helper;
+#![allow(warnings)]
+#![allow(unused)]
+#![allow(dead_code)]
 
+use arcis_imports::*;
 // cost function = b.ln(e.pow(q1/b) + e.pow(q2/b)); all the calculations are done in off-chain
 
 // - create_market - init the conf struct as 0, 0, b_value (from client side encrypted)
@@ -21,16 +23,15 @@ mod circuits {
     }
 
     impl LMSR {
-
-        pub fn init_market_data(lmsr_b:u64) -> LMSR {
+        pub fn init_market_data(lmsr_b: u64) -> LMSR {
             let mut lmsr_data = LMSR {
                 lmsr_b,
                 total_yes_shares: 0,
                 total_no_shares: 0,
-                initial_deposit: 0
+                initial_deposit: 0,
             };
 
-            let initial_deposit =  lmsr_data.cost_calculation(0, 0, lmsr_b);
+            let initial_deposit = lmsr_data.cost_calculation(0, 0, lmsr_b);
 
             lmsr_data.initial_deposit = initial_deposit;
             lmsr_data
@@ -61,10 +62,6 @@ mod circuits {
             let cost = (b * ln_approx) / scale;
             cost
         }
-
-        pub fn buy_shares() {}
-
-        pub fn sell_shares() {}
     }
 
     // input from the user/cleint - Share
@@ -74,55 +71,89 @@ mod circuits {
         user_token_pubkey: SerializedSolanaPublicKey,
     }
 
-    pub struct CreateMarket {
-        pub lmsr_b: u64,
-    }
-
     #[instruction]
-    pub fn create_market(
-        mxe: Mxe,
-        creater_input: Enc<Shared, CreateMarket>
-    ) -> Enc<Mxe, LMSR> {
+    pub fn create_market(mxe: Mxe, creater_input: Enc<Shared, u64>) -> Enc<Mxe, LMSR> {
         let creater_input = creater_input.to_arcis();
-        let lmsr = LMSR::init_market_data(creater_input.lmsr_b);
+        let lmsr = LMSR::init_market_data(creater_input);
 
         mxe.from_arcis(lmsr)
     }
 
-    // #[instruction]
-    // pub fn create_market(input_ctxt: Enc<Mxe, LMSR>) -> Enc<Shared, LMSR> {
-    //     todo!()
-    // }
+    #[instruction]
+    pub fn sell_share(
+        user_sell: Enc<Shared, UserBet>,
+        market_data: Enc<Mxe, LMSR> // Gives the current data of the market
+    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>) {
+        let lmsr_data = market_data.to_arcis();
+        let mut user_buy_data = user_sell.to_arcis();
 
-    // #[instruction]  // // This one should send back the amount of shares need to be minted and bool to reciver token acc pubkey
-    // pub fn buy_shares(
-    //     user_input: Enc<Shared, UserInput>,
-    //     market_state: Enc<MXE, MarketState>,
-    // ) -> (Enc<Shared, BuyResult>, Enc<MXE, MarketState>) {
-    //     // Process user input and update market state
-    // }
+        // for selling Delta C = C1 - C2; (C1 > C2)
 
-    // #[instruction]
-    // pub fn buy_yes_shares(
-    //     order: Enc<Shared, BuyOrder>, // From user (client+MPC can decrypt)
-    //     mut state: Enc<Mxe, ChauMarketConfidential>, // Encrypted market state (MPC only)
-    // ) -> (Enc<Mxe, ChauMarketConfidential>, Enc<Share, UserBet>) {
-    //     // Still confidential after update
-    //     let user_order = order.to_arcis(); // Only cluster sees plaintext
-    //     let mut market = state.to_arcis();
+        // c_one is the current Cost Price
+        let c_one = lmsr_data.cost_calculation(
+            lmsr_data.total_yes_shares,
+            lmsr_data.total_no_shares,
+            lmsr_data.lmsr_b
+        );
 
-    //     // Business logic (LSMR math, update yes_shares etc.)...
-    //     market.outcome_yes_shares += user_order.shares_amount;
-    //     // Consider validating max_payment, etc. confidentially here
+        let mut c_two = 0;
 
-    //     state.owner.from_arcis(market) // Re-confidentialize; stays MXE
-    // }
+        if user_buy_data.is_yes {
+            c_two = lmsr_data.cost_calculation(
+                lmsr_data.total_yes_shares - user_buy_data.amount,
+                lmsr_data.total_no_shares,
+                lmsr_data.lmsr_b
+            );
+        } else {
+            c_two = lmsr_data.cost_calculation(
+                lmsr_data.total_yes_shares,
+                lmsr_data.total_no_shares - user_buy_data.amount,
+                lmsr_data.lmsr_b
+            );
+        }
 
-    //   let args = vec![
-    //     Argument::ArcisPubkey(user_pubkey),
-    //     Argument::PlaintextU128(nonce),
-    //     Argument::EncryptedU64(ciphertext_amount), // for shares_amount
-    //     Argument::EncryptedU64(ciphertext_payment), // for max_payment
-    //     // ...etc.
-    //   ];
+        let price_share = c_one - c_two;
+        user_buy_data.amount = price_share;
+
+        (market_data.owner.from_arcis(lmsr_data), user_sell.owner.from_arcis(user_buy_data))
+    }
+
+    #[instruction]
+    pub fn buy_share(
+        user_buy: Enc<Shared, UserBet>,
+        market_data: Enc<Mxe, LMSR> // Gives the current data of the market
+    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>) {
+        let lmsr_data = market_data.to_arcis();
+        let mut user_buy_data = user_buy.to_arcis();
+
+        // for buying Delta C = C2 - C1; (C2 > C1)
+
+        // c_one is the current Cost Price
+        let c_one = lmsr_data.cost_calculation(
+            lmsr_data.total_yes_shares,
+            lmsr_data.total_no_shares,
+            lmsr_data.lmsr_b
+        );
+
+        let mut c_two = 0;
+
+        if user_buy_data.is_yes {
+            c_two = lmsr_data.cost_calculation(
+                lmsr_data.total_yes_shares + user_buy_data.amount,
+                lmsr_data.total_no_shares,
+                lmsr_data.lmsr_b
+            );
+        } else {
+            c_two = lmsr_data.cost_calculation(
+                lmsr_data.total_yes_shares,
+                lmsr_data.total_no_shares + user_buy_data.amount,
+                lmsr_data.lmsr_b
+            );
+        }
+
+        let price_share = c_two - c_one;
+        user_buy_data.amount = price_share;
+
+        (market_data.owner.from_arcis(lmsr_data), user_buy.owner.from_arcis(user_buy_data))
+    }
 }
