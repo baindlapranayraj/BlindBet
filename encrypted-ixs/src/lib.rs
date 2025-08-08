@@ -1,7 +1,3 @@
-#![allow(warnings)]
-#![allow(unused)]
-#![allow(dead_code)]
-
 use arcis_imports::*;
 // cost function = b.ln(e.pow(q1/b) + e.pow(q2/b)); all the calculations are done in off-chain
 
@@ -80,50 +76,11 @@ mod circuits {
     }
 
     #[instruction]
-    pub fn sell_share(
-        user_sell: Enc<Shared, UserBet>,
-        market_data: Enc<Mxe, LMSR> // Gives the current data of the market
-    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>) {
-        let lmsr_data = market_data.to_arcis();
-        let mut user_buy_data = user_sell.to_arcis();
-
-        // for selling Delta C = C1 - C2; (C1 > C2)
-
-        // c_one is the current Cost Price
-        let c_one = lmsr_data.cost_calculation(
-            lmsr_data.total_yes_shares,
-            lmsr_data.total_no_shares,
-            lmsr_data.lmsr_b
-        );
-
-        let mut c_two = 0;
-
-        if user_buy_data.is_yes {
-            c_two = lmsr_data.cost_calculation(
-                lmsr_data.total_yes_shares - user_buy_data.amount,
-                lmsr_data.total_no_shares,
-                lmsr_data.lmsr_b
-            );
-        } else {
-            c_two = lmsr_data.cost_calculation(
-                lmsr_data.total_yes_shares,
-                lmsr_data.total_no_shares - user_buy_data.amount,
-                lmsr_data.lmsr_b
-            );
-        }
-
-        let price_share = c_one - c_two;
-        user_buy_data.amount = price_share;
-
-        (market_data.owner.from_arcis(lmsr_data), user_sell.owner.from_arcis(user_buy_data))
-    }
-
-    #[instruction]
     pub fn buy_share(
         user_buy: Enc<Shared, UserBet>,
         market_data: Enc<Mxe, LMSR> // Gives the current data of the market
     ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>) {
-        let lmsr_data = market_data.to_arcis();
+        let mut lmsr_data = market_data.to_arcis();
         let mut user_buy_data = user_buy.to_arcis();
 
         // for buying Delta C = C2 - C1; (C2 > C1)
@@ -143,17 +100,64 @@ mod circuits {
                 lmsr_data.total_no_shares,
                 lmsr_data.lmsr_b
             );
+
+            lmsr_data.total_yes_shares = lmsr_data.total_yes_shares + user_buy_data.amount;
         } else {
             c_two = lmsr_data.cost_calculation(
                 lmsr_data.total_yes_shares,
                 lmsr_data.total_no_shares + user_buy_data.amount,
                 lmsr_data.lmsr_b
             );
+
+            lmsr_data.total_no_shares = lmsr_data.total_no_shares + user_buy_data.amount;
         }
 
         let price_share = c_two - c_one;
         user_buy_data.amount = price_share;
 
         (market_data.owner.from_arcis(lmsr_data), user_buy.owner.from_arcis(user_buy_data))
+    }
+
+    #[instruction]
+    pub fn sell_share(
+        user_sell: Enc<Shared, UserBet>,
+        market_data: Enc<Mxe, LMSR> // Gives the current data of the market
+    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>) {
+        let mut lmsr_data = market_data.to_arcis();
+        let mut user_sell_data = user_sell.to_arcis();
+
+        // for selling Delta C = C1 - C2; (C1 > C2)
+
+        // c_one is the current Cost Price
+        let c_one = lmsr_data.cost_calculation(
+            lmsr_data.total_yes_shares,
+            lmsr_data.total_no_shares,
+            lmsr_data.lmsr_b
+        );
+
+        let mut c_two = 0;
+
+        if user_sell_data.is_yes {
+            c_two = lmsr_data.cost_calculation(
+                lmsr_data.total_yes_shares - user_sell_data.amount,
+                lmsr_data.total_no_shares,
+                lmsr_data.lmsr_b
+            );
+
+            lmsr_data.total_yes_shares = lmsr_data.total_yes_shares - user_sell_data.amount;
+        } else {
+            c_two = lmsr_data.cost_calculation(
+                lmsr_data.total_yes_shares,
+                lmsr_data.total_no_shares - user_sell_data.amount,
+                lmsr_data.lmsr_b
+            );
+
+            lmsr_data.total_no_shares = lmsr_data.total_no_shares - user_sell_data.amount;
+        }
+
+        let price_share = c_one - c_two;
+        user_sell_data.amount = price_share;
+
+        (market_data.owner.from_arcis(lmsr_data), user_sell.owner.from_arcis(user_sell_data))
     }
 }
