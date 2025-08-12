@@ -2,7 +2,7 @@ use arcis_imports::*;
 // cost function = b.ln(e.pow(q1/b) + e.pow(q2/b)); all the calculations are done in off-chain
 
 // - create_market - init the conf struct as 0, 0, b_value (from client side encrypted)
-// - buy_shares - calculate price using LMSR -
+// - buy_shares - calculate price using LMSR
 // - sell_shares - calculate price using LMSR
 
 #[encrypted]
@@ -70,7 +70,7 @@ mod circuits {
     #[instruction]
     pub fn create_market(mxe: Mxe, creater_input: Enc<Shared, u64>) -> Enc<Mxe, LMSR> {
         let creater_input = creater_input.to_arcis();
-        let lmsr = LMSR::init_market_data(creater_input);
+        let lmsr = LMSR::init_market_data(creater_input); // Initializing the market
 
         mxe.from_arcis(lmsr)
     }
@@ -112,7 +112,7 @@ mod circuits {
             lmsr_data.total_no_shares = lmsr_data.total_no_shares + user_buy_data.amount;
         }
 
-        let price_share = c_two - c_one;
+        let price_share = c_two - c_one; // the amount user needs to pay for buying shares
         user_buy_data.amount = price_share;
 
         (market_data.owner.from_arcis(lmsr_data), user_buy.owner.from_arcis(user_buy_data))
@@ -156,8 +156,17 @@ mod circuits {
         }
 
         let price_share = c_one - c_two;
-        user_sell_data.amount = price_share;
+        user_sell_data.amount = price_share; // the amount user gets for selling the shares
 
         (market_data.owner.from_arcis(lmsr_data), user_sell.owner.from_arcis(user_sell_data))
     }
+
+    pub fn resolve_market(resolution_data: Enc<Shared, bool>) -> bool {
+        let resolve_data = resolution_data.to_arcis();
+
+        resolve_data
+    }
+
+    // - resolve_market (with input of encrypted bool/outcome from Oracle)
+    // - user_claim_amount
 }
