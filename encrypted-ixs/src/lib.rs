@@ -4,6 +4,7 @@ use arcis_imports::*;
 // - create_market - init the conf struct as 0, 0, b_value (from client side encrypted)
 // - buy_shares - calculate price using LMSR
 // - sell_shares - calculate price using LMSR
+// - resolve_market
 
 #[encrypted]
 mod circuits {
@@ -16,6 +17,8 @@ mod circuits {
         pub lmsr_b: u64, // should come from client
 
         pub initial_deposit: u64,
+
+        pub market_liquidity: u64,
     }
 
     impl LMSR {
@@ -25,11 +28,14 @@ mod circuits {
                 total_yes_shares: 0,
                 total_no_shares: 0,
                 initial_deposit: 0,
+                market_liquidity: 0,
             };
 
             let initial_deposit = lmsr_data.cost_calculation(0, 0, lmsr_b);
 
             lmsr_data.initial_deposit = initial_deposit;
+            lmsr_data.market_liquidity = initial_deposit;
+
             lmsr_data
         }
 
@@ -64,7 +70,11 @@ mod circuits {
     pub struct UserBet {
         is_yes: bool,
         amount: u64,
-        user_token_pubkey: SerializedSolanaPublicKey,
+    }
+
+    pub struct UserWager {
+        pub yes_shares: u64,
+        pub no_shares: u64,
     }
 
     #[instruction]
@@ -78,10 +88,12 @@ mod circuits {
     #[instruction]
     pub fn buy_share(
         user_buy: Enc<Shared, UserBet>,
-        market_data: Enc<Mxe, LMSR> // Gives the current data of the market
-    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>) {
+        market_data: Enc<Mxe, LMSR>, // Gives the current data of the market
+        user_wager: Enc<Mxe, UserWager>,
+    ) -> (Enc<Mxe, LMSR>, Enc<Mxe, UserWager>, Enc<Shared, UserBet>) {
         let mut lmsr_data = market_data.to_arcis();
         let mut user_buy_data = user_buy.to_arcis();
+        let mut user_wager_data = user_wager.to_arcis();
 
         // for buying Delta C = C2 - C1; (C2 > C1)
 
@@ -89,7 +101,7 @@ mod circuits {
         let c_one = lmsr_data.cost_calculation(
             lmsr_data.total_yes_shares,
             lmsr_data.total_no_shares,
-            lmsr_data.lmsr_b
+            lmsr_data.lmsr_b,
         );
 
         let mut c_two = 0;
@@ -98,33 +110,47 @@ mod circuits {
             c_two = lmsr_data.cost_calculation(
                 lmsr_data.total_yes_shares + user_buy_data.amount,
                 lmsr_data.total_no_shares,
-                lmsr_data.lmsr_b
+                lmsr_data.lmsr_b,
             );
 
+            // Update the market data
             lmsr_data.total_yes_shares = lmsr_data.total_yes_shares + user_buy_data.amount;
+
+            // Update the UserWager data
+            user_wager_data.yes_shares = user_wager_data.yes_shares + user_buy_data.amount;
         } else {
             c_two = lmsr_data.cost_calculation(
                 lmsr_data.total_yes_shares,
                 lmsr_data.total_no_shares + user_buy_data.amount,
-                lmsr_data.lmsr_b
+                lmsr_data.lmsr_b,
             );
 
+            // Update the market data
             lmsr_data.total_no_shares = lmsr_data.total_no_shares + user_buy_data.amount;
+
+            // Update the UserWager data
+            user_wager_data.no_shares = user_wager_data.no_shares + user_buy_data.amount;
         }
 
-        let price_share = c_two - c_one; // the amount user needs to pay for buying shares
-        user_buy_data.amount = price_share;
+        let price_share = c_two - c_one;
+        user_buy_data.amount = price_share; //  the amount user needs to pay for buying shares
 
-        (market_data.owner.from_arcis(lmsr_data), user_buy.owner.from_arcis(user_buy_data))
+        (
+            market_data.owner.from_arcis(lmsr_data),
+            user_wager.owner.from_arcis(user_wager_data),
+            user_buy.owner.from_arcis(user_buy_data),
+        )
     }
 
     #[instruction]
     pub fn sell_share(
         user_sell: Enc<Shared, UserBet>,
-        market_data: Enc<Mxe, LMSR> // Gives the current data of the market
-    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>) {
+        market_data: Enc<Mxe, LMSR>, // Gives the current data of the market
+        user_wager: Enc<Mxe, UserWager>,
+    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>, Enc<Mxe, UserWager>) {
         let mut lmsr_data = market_data.to_arcis();
         let mut user_sell_data = user_sell.to_arcis();
+        let mut user_wager_data = user_wager.to_arcis();
 
         // for selling Delta C = C1 - C2; (C1 > C2)
 
@@ -132,7 +158,7 @@ mod circuits {
         let c_one = lmsr_data.cost_calculation(
             lmsr_data.total_yes_shares,
             lmsr_data.total_no_shares,
-            lmsr_data.lmsr_b
+            lmsr_data.lmsr_b,
         );
 
         let mut c_two = 0;
@@ -141,24 +167,36 @@ mod circuits {
             c_two = lmsr_data.cost_calculation(
                 lmsr_data.total_yes_shares - user_sell_data.amount,
                 lmsr_data.total_no_shares,
-                lmsr_data.lmsr_b
+                lmsr_data.lmsr_b,
             );
 
+            // Update the market data
             lmsr_data.total_yes_shares = lmsr_data.total_yes_shares - user_sell_data.amount;
+
+            // Update the UserWager data
+            user_wager_data.yes_shares = user_wager_data.yes_shares - user_sell_data.amount;
         } else {
             c_two = lmsr_data.cost_calculation(
                 lmsr_data.total_yes_shares,
                 lmsr_data.total_no_shares - user_sell_data.amount,
-                lmsr_data.lmsr_b
+                lmsr_data.lmsr_b,
             );
 
+            // Update the market data
             lmsr_data.total_no_shares = lmsr_data.total_no_shares - user_sell_data.amount;
+
+            // Update the UserWager data
+            user_wager_data.no_shares = user_wager_data.no_shares - user_sell_data.amount;
         }
 
         let price_share = c_one - c_two;
         user_sell_data.amount = price_share; // the amount user gets for selling the shares
 
-        (market_data.owner.from_arcis(lmsr_data), user_sell.owner.from_arcis(user_sell_data))
+        (
+            market_data.owner.from_arcis(lmsr_data),
+            user_sell.owner.from_arcis(user_sell_data),
+            user_wager.owner.from_arcis(user_wager_data),
+        )
     }
 
     pub fn resolve_market(resolution_data: Enc<Shared, bool>) -> bool {
@@ -167,6 +205,15 @@ mod circuits {
         resolve_data
     }
 
-    // - resolve_market (with input of encrypted bool/outcome from Oracle)
+    pub fn claim_amount(user_wager: Enc<Mxe, UserWager>, is_yes: bool) -> u64 {
+        let user_wager_data: UserWager = user_wager.to_arcis();
+
+        if is_yes {
+            user_wager_data.yes_shares
+        } else {
+            user_wager_data.no_shares
+        }
+    }
+
     // - user_claim_amount
 }

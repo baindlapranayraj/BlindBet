@@ -23,6 +23,7 @@ pub mod blindbet {
 pub struct InitAddTogetherCompDef<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
+
     #[account(
         mut,
         address = derive_mxe_pda!()
@@ -32,6 +33,7 @@ pub struct InitAddTogetherCompDef<'info> {
     /// CHECK: comp_def_account, checked by arcium program.
     /// Can't check it here as it's not initialized yet.
     pub comp_def_account: UncheckedAccount<'info>,
+
     pub arcium_program: Program<'info, Arcium>,
     pub system_program: Program<'info, System>,
 }
