@@ -89,8 +89,8 @@ mod circuits {
     pub fn buy_shares(
         user_buy: Enc<Shared, UserBet>,
         market_data: Enc<Mxe, LMSR>, // Gives the current data of the market
-        user_wager: Enc<Mxe, UserWager>, 
-    ) -> (Enc<Mxe, LMSR>, Enc<Mxe, UserWager>, Enc<Shared, UserBet>) {
+        user_wager: Enc<Mxe, UserWager>,
+    ) -> (Enc<Mxe, LMSR>, Enc<Mxe, UserWager>, u64) {
         let mut lmsr_data = market_data.to_arcis();
         let mut user_buy_data = user_buy.to_arcis();
         let mut user_wager_data = user_wager.to_arcis();
@@ -138,7 +138,7 @@ mod circuits {
         (
             market_data.owner.from_arcis(lmsr_data),
             user_wager.owner.from_arcis(user_wager_data),
-            user_buy.owner.from_arcis(user_buy_data),
+            price_share.reveal(),
         )
     }
 
@@ -147,9 +147,9 @@ mod circuits {
         user_sell: Enc<Shared, UserBet>,
         market_data: Enc<Mxe, LMSR>, // Gives the current data of the market
         user_wager: Enc<Mxe, UserWager>,
-    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>, Enc<Mxe, UserWager>) {
+    ) -> (Enc<Mxe, LMSR>, Enc<Shared, UserBet>, u64) {
         let mut lmsr_data = market_data.to_arcis();
-        let mut user_sell_data = user_sell.to_arcis();
+        let user_sell_data = user_sell.to_arcis();
         let mut user_wager_data = user_wager.to_arcis();
 
         // for selling Delta C = C1 - C2; (C1 > C2)
@@ -190,12 +190,11 @@ mod circuits {
         }
 
         let price_share = c_one - c_two;
-        user_sell_data.amount = price_share; // the amount user gets for selling the shares
 
         (
             market_data.owner.from_arcis(lmsr_data),
             user_sell.owner.from_arcis(user_sell_data),
-            user_wager.owner.from_arcis(user_wager_data),
+            price_share.reveal(),
         )
     }
 

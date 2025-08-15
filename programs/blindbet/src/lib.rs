@@ -42,10 +42,9 @@ pub mod blindbet {
 
         lmsr_b: [u8; 32],
         pub_key: [u8; 32],
-        nonce: u128
+        nonce: u128,
     ) -> Result<()> {
-        let args =
-            vec![
+        let args = vec![
             Argument::ArcisPubkey(pub_key),
             Argument::PlaintextU128(nonce),
             Argument::EncryptedU8(lmsr_b),
@@ -78,7 +77,7 @@ pub mod blindbet {
                 is_writable: true,
                 pubkey: ctx.accounts.market_account.key(),
             }],
-            None
+            None,
         )?;
 
         Ok(())
@@ -87,7 +86,7 @@ pub mod blindbet {
     #[arcium_callback(encrypted_ix = "create_market")]
     pub fn create_market_callback(
         ctx: Context<CreateMarketCallback>,
-        output: ComputationOutputs<CreateMarketOutput>
+        output: ComputationOutputs<CreateMarketOutput>,
     ) -> Result<()> {
         let o: MXEEncryptedStruct<5> = match output {
             ComputationOutputs::Success(CreateMarketOutput { field_0 }) => field_0,
@@ -118,7 +117,7 @@ pub mod blindbet {
         is_yes: [u8; 32],
         amount: [u8; 32],
         nonce: u128,
-        pub_key: [u8; 32]
+        pub_key: [u8; 32],
     ) -> Result<()> {
         // do the qeue computation
         if !ctx.accounts.user_wager_acount.is_intialized {
@@ -134,16 +133,14 @@ pub mod blindbet {
             });
         }
 
-        let args =
-            vec![
+        let args = vec![
             Argument::ArcisPubkey(pub_key),
             Argument::PlaintextU128(nonce),
-            Argument::EncryptedBool(is_yes),  // Input 
-            Argument::EncryptedU64(amount),   // Input 
-
+            Argument::EncryptedBool(is_yes), // Input
+            Argument::EncryptedU64(amount),  // Input
             Argument::PlaintextU128(ctx.accounts.market_account.nonce),
-            Argument::Account(ctx.accounts.market_account.key(), 8 , 32*5),     // LMSR Struct 
-            Argument::Account(ctx.accounts.user_wager_acount.key(), 8 , 32*2),  // UserWager Struct
+            Argument::Account(ctx.accounts.market_account.key(), 8, 32 * 5), // LMSR Struct
+            Argument::Account(ctx.accounts.user_wager_acount.key(), 8, 32 * 2), // UserWager Struct
         ];
 
         queue_computation(
@@ -151,26 +148,25 @@ pub mod blindbet {
             computation_offset,
             args,
             vec![
-            CallbackAccount {
-                is_writable: true,
-                 pubkey: ctx.accounts.market_account.key(),
-            },
-            CallbackAccount {
-                is_writable: true,
-                pubkey: ctx.accounts.user_wager_acount.key()
-            }
-        ],
-            None
+                CallbackAccount {
+                    is_writable: true,
+                    pubkey: ctx.accounts.market_account.key(),
+                },
+                CallbackAccount {
+                    is_writable: true,
+                    pubkey: ctx.accounts.user_wager_acount.key(),
+                },
+            ],
+            None,
         )?;
 
         Ok(())
     }
 
-    //todo: transfer the user amount to liquidity pool and upate the user_wager acount with new yes or no shares
     #[arcium_callback(encrypted_ix = "buy_shares")]
     pub fn buy_shares_callback(
         ctx: Context<BuySharesCallback>,
-        output: ComputationOutputs<BuySharesOutput>
+        output: ComputationOutputs<BuySharesOutput>,
     ) -> Result<()> {
         let o: BuySharesTupleStruct0 = match output {
             ComputationOutputs::Success(BuySharesOutput { field_0 }) => field_0,
@@ -195,12 +191,98 @@ pub mod blindbet {
 
         // transfer logic
 
-        let ctx = CpiContext::new(ctx.accounts.system_program.to_account_info(), Transfer {
-            from: ctx.accounts.signer.to_account_info(),
-            to: ctx.accounts.liquidity_pool.to_account_info(),
-        });
+        let ctx = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.signer.to_account_info(),
+                to: ctx.accounts.liquidity_pool.to_account_info(),
+            },
+        );
 
-        // transfer(ctx, transfer_data.ciphertexts[1]);
+        transfer(ctx, transfer_data);
+
+        Ok(())
+    }
+
+    pub fn sell_shares_comp_def(ctx: Context<SellSharesCompDef>) -> Result<()> {
+        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        Ok(())
+    }
+
+    pub fn sell_shares(
+        ctx: Context<SellShares>,
+        computation_offset: u64,
+        is_yes: [u8; 32],
+        amount: [u8; 32],
+        nonce: u128,
+        pub_key: [u8; 32],
+    ) -> Result<()> {
+        let args = vec![
+            Argument::ArcisPubkey(pub_key),
+            Argument::PlaintextU128(nonce),
+            Argument::EncryptedBool(is_yes), // Input
+            Argument::EncryptedU64(amount),  // Input
+            Argument::PlaintextU128(ctx.accounts.market_account.nonce),
+            Argument::Account(ctx.accounts.market_account.key(), 8, 32 * 5), // LMSR Struct
+            Argument::Account(ctx.accounts.user_wager_acount.key(), 8, 32 * 2), // UserWager Struct
+        ];
+
+        queue_computation(
+            ctx.accounts,
+            computation_offset,
+            args,
+            vec![
+                CallbackAccount {
+                    is_writable: true,
+                    pubkey: ctx.accounts.market_account.key(),
+                },
+                CallbackAccount {
+                    is_writable: true,
+                    pubkey: ctx.accounts.user_wager_acount.key(),
+                },
+            ],
+            None,
+        )?;
+
+        Ok(())
+    }
+
+    #[arcium_callback(encrypted_ix = "sell_shares")]
+    pub fn sell_shares_callback(
+        ctx: Context<BuySharesCallback>,
+        output: ComputationOutputs<SellSharesOutput>,
+    ) -> Result<()> {
+        let o = match output {
+            ComputationOutputs::Success(SellSharesOutput { field_0 }) => field_0,
+            _ => {
+                return Err(ErrorCode::AbortedComputation.into());
+            }
+        };
+
+        let lmsr_data = o.field_0;
+        let user_wager_data = o.field_1;
+        let transfer_data = o.field_2;
+
+        // Update Market Struct
+        ctx.accounts.market_account.nonce = lmsr_data.nonce;
+        ctx.accounts.market_account.outcome_yes_shares = lmsr_data.ciphertexts[0];
+        ctx.accounts.market_account.outcome_no_shares = lmsr_data.ciphertexts[1];
+
+        // Update the UserWager Struct
+        ctx.accounts.user_wager_acount.nonce = user_wager_data.nonce;
+        ctx.accounts.user_wager_acount.yes_shares = user_wager_data.ciphertexts[0];
+        ctx.accounts.user_wager_acount.no_shares = user_wager_data.ciphertexts[1];
+
+        // transfer logic
+        let ctx = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.signer.to_account_info(),
+                to: ctx.accounts.liquidity_pool.to_account_info(),
+            },
+        );
+
+        transfer(ctx, transfer_data);
 
         Ok(())
     }
