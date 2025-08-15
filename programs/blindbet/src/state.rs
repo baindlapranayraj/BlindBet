@@ -4,23 +4,20 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 pub struct Market {
     pub outcome_yes_shares: [u8; 32], // q1 - confidential
-    pub outcome_no_shares: [u8; 32],  // q2 - confidential
-
-    pub lsmr_b: [u8; 32],          // confidential
+    pub outcome_no_shares: [u8; 32], // q2 - confidential
+    pub lsmr_b: [u8; 32], // confidential
     pub intial_deposite: [u8; 32], // confidential
-    pub dead_line: i64,            // unix_time_stamp
-
-    pub market_liquidity: [u8; 32],
+    pub market_liquidity: [u8; 32], // confidential
 
     pub market_state: MarketStatus,
     pub market_outcome: MarketOutcome,
 
-    pub mint_yes_bump: u8,
-    pub mint_no_bump: u8,
+    pub dead_line: i64, // unix_time_stamp
+
     pub market_vault_bump: u8,
     pub market_bump: u8,
 
-    pub nonce: [u8; 16],
+    pub nonce: u128,
 
     pub creater: Pubkey,
     #[max_len(32)]
@@ -30,15 +27,14 @@ pub struct Market {
 }
 
 #[account]
-#[derive(InitSpace)]
+#[derive(InitSpace, Default)]
 pub struct UserWager {
-    pub user_pubkey: Pubkey,
-
-    pub market_pubkey: Pubkey,
-
     pub yes_shares: [u8; 32],
     pub no_shares: [u8; 32],
+    pub nonce: u128,
 
+    pub user_pubkey: Pubkey,
+    pub market_pubkey: Pubkey,
     pub is_intialized: bool,
 
     pub user_wager_bump: u8,
@@ -48,7 +44,7 @@ pub struct UserWager {
 #[repr(u8)]
 pub enum MarketStatus {
     Resolved, // The market has been resolved.
-    Active,   // The market is still active (not resolved).
+    Active, // The market is still active (not resolved).
 }
 
 #[derive(InitSpace, AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]

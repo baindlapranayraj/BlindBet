@@ -86,10 +86,10 @@ mod circuits {
     }
 
     #[instruction]
-    pub fn buy_share(
+    pub fn buy_shares(
         user_buy: Enc<Shared, UserBet>,
         market_data: Enc<Mxe, LMSR>, // Gives the current data of the market
-        user_wager: Enc<Mxe, UserWager>,
+        user_wager: Enc<Mxe, UserWager>, 
     ) -> (Enc<Mxe, LMSR>, Enc<Mxe, UserWager>, Enc<Shared, UserBet>) {
         let mut lmsr_data = market_data.to_arcis();
         let mut user_buy_data = user_buy.to_arcis();
@@ -143,7 +143,7 @@ mod circuits {
     }
 
     #[instruction]
-    pub fn sell_share(
+    pub fn sell_shares(
         user_sell: Enc<Shared, UserBet>,
         market_data: Enc<Mxe, LMSR>, // Gives the current data of the market
         user_wager: Enc<Mxe, UserWager>,
