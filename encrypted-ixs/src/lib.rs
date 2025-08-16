@@ -198,20 +198,27 @@ mod circuits {
         )
     }
 
+    #[instruction]
     pub fn resolve_market(resolution_data: Enc<Shared, bool>) -> bool {
         let resolve_data = resolution_data.to_arcis();
 
-        resolve_data
+        resolve_data.reveal()
     }
 
+    
+    #[instruction]
     pub fn claim_amount(user_wager: Enc<Mxe, UserWager>, is_yes: bool) -> u64 {
         let user_wager_data: UserWager = user_wager.to_arcis();
 
+        let mut reveal_data: u64 = 0;
+
         if is_yes {
-            user_wager_data.yes_shares
+            reveal_data = user_wager_data.yes_shares;
         } else {
-            user_wager_data.no_shares
+            reveal_data = user_wager_data.no_shares;
         }
+
+        reveal_data.reveal()
     }
 
     // - user_claim_amount

@@ -6,4 +6,7 @@ pub enum ErrorCode {
     AbortedComputation,
     #[msg("Cluster not set")]
     ClusterNotSet,
+
+    #[msg("Resolve before Market Deadline")]
+    MarketNotResolved,
 }
