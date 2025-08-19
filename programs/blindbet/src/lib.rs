@@ -247,7 +247,7 @@ pub mod blindbet {
 
     #[arcium_callback(encrypted_ix = "sell_shares")]
     pub fn sell_shares_callback(
-        ctx: Context<BuySharesCallback>,
+        ctx: Context<SellSharesCallback>,
         output: ComputationOutputs<SellSharesOutput>
     ) -> Result<()> {
         let o = match output {
